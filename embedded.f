@@ -1,6 +1,11 @@
-( Embedded Systems - Sistemi Embedded - 17873 )
-( Some code for NUCLEO STM32F446RE )
-( Daniele Peri, Università degli Studi di Palermo, 17-18 )
+\ Embedded Systems - Sistemi Embedded - 17873 
+\ HAL definition for NUCLEO STM32F446RE 
+\ Davide Proietto, Università degli Studi di Palermo, 21-22 
+
+\ GPIO register sets are mapped in memory 
+\ starting from address $40020000
+\ Each GPIO register set spans $0400 bytes 
+\ See en.DM00135183.pdf page 55
 
 : GPIO{  ( addr -- )  ;
 : PORT   ( addr -- addr )  DUP CONSTANT $0400 + ;
@@ -27,10 +32,31 @@ $04 REGS{
 : 2BIT   $3 2 ;
 : 4BIT   $F 4 ;
 : MASK  ( index mask width -- offset_mask ) ROT * LSHIFT ; \ ROT ( 1 2 3 - 2 3 1)
+
+\ 5 GPIOA MODE@ .
+\ Shows current mode for pin 5 of GPIO Port A (controlling LED2)
+\ 13 GPIOC MODE@ .
+\ Shows current mode for pin 13 of GPIO Port C (connected to Button B1 USER)
+\ 1 5 GPIOA MODE!
+\ Sets Output mode (1) for pin 5 of GPIO Port A (LED2)
+\ 5 GPIOA ODR PIN BIT SET
+\ Sets pin 5 of GPIO Port A to high (LED2 turns ON)
+\ TRUE 5 GPIOA OUT!
+\ Sets pin 5 of GPIO Port A to high (LED2 turns ON)
+
+
 : PIN   SWAP 1BIT MASK SWAP ;
 : MODE   OVER 2BIT MASK SWAP ;
 : MODE!   >R R@ MODE @ SWAP NOT AND ROT 3 AND ROT 2 * LSHIFT OR R> ! ; \ to R -> from R
+\ : (MODE)   MODER OVER 2BIT MASK SWAP ;
+\ : MODE@   (MODE) @ AND SWAP 2 * RSHIFT ;
+\ : MODE!   >R R@ (MODE) @ SWAP NOT AND ROT $3 AND ROT 2 * LSHIFT OR R> ! ;
+: (AF)  OVER 8 < IF AFRL ELSE AFRH SWAP 8 - SWAP THEN  OVER 4BIT MASK SWAP ;
+: AF@   (AF) @ AND SWAP 4 * RSHIFT ;
+: AF!   (AF) >R R@ @ SWAP NOT AND ROT $F AND ROT 4 * LSHIFT OR R> ! ;
 : BIT  ( mask addr -- addr value mask )  DUP @ ROT ;
+: SET  ( addr value mask -- )  OR SWAP ! ;
+: CLEAR  ( addr value mask -- )  NOT AND SWAP ! ;
 : TRUTH  ( addr value mask -- value )  AND 0<> NIP ; \ NIP (1 2 - 2)
 : OUT@   ODR PIN BIT TRUTH ;
 : OUT!   ODR PIN BIT SWAP OVER NOT AND >R ROT AND R> OR SWAP ! ;
@@ -41,6 +67,29 @@ $04 REGS{
 : ?BUTTON   BUTTON PRESSED ;
 : CLICKED   BEGIN 2DUP PRESSED UNTIL  BEGIN 2DUP RELEASED UNTIL 2DROP ;
 
+: LED   $20 GPIOA ODR ;      \ Same as 5 GPIOA ODR PIN
+: ON    ( mask addr -- ) BIT SET ;  
+: OFF   ( mask addr -- ) BIT CLEAR ;  
+: ON?   BIT TRUTH ;
+: BLINK   2DUP  OFF  1000 DELAY  2DUP ON  1000 DELAY OFF ;
+
+\ Examples:
+\
+\ LED ON
+\ LED BLINK
+\ 
+
+( Test code: wait for button click then blink the LED, do it n times )
+: TEST  ( n -- ) 0 DO  BUTTON CLICKED  LED BLINK  LOOP ;
+
+\ Configuration: 
+1 5 GPIOA MODE!
+
+( Ten click test )
+( 10 TEST )
+
+
+\ TEMPORIZZAZIONI DA MILLISECONDI IN POI
 : 1ms 3000 ;
 : 1s  1ms 1000 *  ;
 : 1m  1s 60 *  ; 
@@ -49,6 +98,7 @@ $04 REGS{
 \ Definitions for a few Arduino pins on 
 \ connectors CN5 and CN9:
 
+: D0    3 GPIOA ;
 : D2   10 GPIOA ; 
 : D3    3 GPIOB ;
 : D4    5 GPIOB ;
@@ -58,6 +108,12 @@ $04 REGS{
 : D11   7 GPIOA ;
 : D12   6 GPIOA ;
 : D13   5 GPIOA ;
+\ Examples:
+\
+\ TRUE D13 OUT!
+\ Sets Arduino D13 pin (connector CN5) high
+\ This is another way to turn the LD2 LED on.
+\
 
 $40023800 constant RCC
 $04 REGS{
@@ -104,7 +160,7 @@ $04 REGS{
     STRT ADC1 SR bis!           \ Regular Channel Start Flag
     SWSTART ADC1 CR2 bis!       
 ;
-
+\ Connessioni per la modalità di collegamento parallela a 4 bit
 : LCDE   D11 ;
 : LCDRS  D12 ; 
 : LCD7   D2 ;
@@ -112,18 +168,22 @@ $04 REGS{
 : LCD5   D4 ;
 : LCD4   D5 ;
 
+\ Word per inizialiazzare LCD: setta in modalità OUTPUT i GPIO;
 : LCD_SETUP
    1 LCD4 MODE!   1 LCD5 MODE!  1 LCD6 MODE!
    1 LCD7 MODE!  1 LCDRS MODE!  1 LCDE MODE!
 ;
 
 : BTST AND 0<> ;
+
 : LCDREG4H!
    DUP $80 BTST LCD7 OUT! DUP $40 BTST LCD6 OUT! 
    DUP $20 BTST LCD5 OUT!     $10 BTST LCD4 OUT! ;
+
 : LCDREG4H@
    0 LCD7 OUT@ $80 AND OR  LCD6 OUT@ $40 AND OR
      LCD5 OUT@ $20 AND OR  LCD4 OUT@ $10 AND OR ;
+
 : LCDRSH   -1 LCDRS OUT! ;
 : LCDRSL    0 LCDRS OUT! ;
 : LCDEH    -1 LCDE OUT! ;
@@ -133,13 +193,12 @@ $04 REGS{
    ( send upper 4 bits: ) DUP LCDEH  LCDREG4H!  LCDEL
    ( send lower 4 bits: ) LCDEH 4 LSHIFT  LCDREG4H!  LCDEL ;
 
-\ Examples:
-\
-\ $1 LCDWR4
 \ Clear display
-\
-\ $C0 LCDWR4
+: CLEAR $1 LCDWR4 ;
+
 \ Move cursor to the beginning of the second line
+: >LINE2  $C0 LCDWR4 ;
+
 
 : LCDEMIT   $100 OR LCDWR4 ;
 : LCDTYPE   OVER + SWAP ?DO I C@ LCDEMIT LOOP ;
@@ -202,9 +261,9 @@ $04 REGS{
 : PLANT 2 LCDEMIT ; 
 
 : LCD_WELCOME
-    s"   SYSTEM  DOWN  " LCDTYPE 
+    s" X ATTIVARE PREMI" LCDTYPE 
     NEWLINE
-    s" PRESS BLU BUTTON" LCDTYPE
+    s" IL PULSANTE BLU" LCDTYPE
 ;
 
 : NUMBER2LCD
@@ -214,21 +273,21 @@ $04 REGS{
 ;
 
 : DRY_SOIL  
-    s" DRY SOIL   " LCDTYPE DRY
+    s" ASCIUTTO   " LCDTYPE DRY
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : PERFECT_SOIL 
-    PLANT s"  PERFECT SOIL " LCDTYPE PLANT
+    PLANT s" CONDIZIONI OK " LCDTYPE PLANT
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : WET_SOIL 
-    s" WET SOIL   " LCDTYPE WET
+    s" BAGNATO   " LCDTYPE WET
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : MEAN  
@@ -258,3 +317,5 @@ $04 REGS{
     BUTTON CLICKED 
     BEGIN  ADC_ON ?VALUE ADC_OFF ?MOISTURE 1m DELAY  AGAIN
 ;
+
+INIT

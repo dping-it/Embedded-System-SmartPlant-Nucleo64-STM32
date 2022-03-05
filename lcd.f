@@ -1,4 +1,4 @@
-
+\ Connessioni per la modalità di collegamento parallela a 4 bit
 : LCDE   D11 ;
 : LCDRS  D12 ; 
 : LCD7   D2 ;
@@ -6,18 +6,22 @@
 : LCD5   D4 ;
 : LCD4   D5 ;
 
+\ Word per inizialiazzare LCD: setta in modalità OUTPUT i GPIO;
 : LCD_SETUP
    1 LCD4 MODE!   1 LCD5 MODE!  1 LCD6 MODE!
    1 LCD7 MODE!  1 LCDRS MODE!  1 LCDE MODE!
 ;
 
 : BTST AND 0<> ;
+
 : LCDREG4H!
    DUP $80 BTST LCD7 OUT! DUP $40 BTST LCD6 OUT! 
    DUP $20 BTST LCD5 OUT!     $10 BTST LCD4 OUT! ;
+
 : LCDREG4H@
    0 LCD7 OUT@ $80 AND OR  LCD6 OUT@ $40 AND OR
      LCD5 OUT@ $20 AND OR  LCD4 OUT@ $10 AND OR ;
+
 : LCDRSH   -1 LCDRS OUT! ;
 : LCDRSL    0 LCDRS OUT! ;
 : LCDEH    -1 LCDE OUT! ;
@@ -27,13 +31,12 @@
    ( send upper 4 bits: ) DUP LCDEH  LCDREG4H!  LCDEL
    ( send lower 4 bits: ) LCDEH 4 LSHIFT  LCDREG4H!  LCDEL ;
 
-\ Examples:
-\
-\ $1 LCDWR4
 \ Clear display
-\
-\ $C0 LCDWR4
+: CLEAR $1 LCDWR4 ;
+
 \ Move cursor to the beginning of the second line
+: >LINE2  $C0 LCDWR4 ;
+
 
 : LCDEMIT   $100 OR LCDWR4 ;
 : LCDTYPE   OVER + SWAP ?DO I C@ LCDEMIT LOOP ;

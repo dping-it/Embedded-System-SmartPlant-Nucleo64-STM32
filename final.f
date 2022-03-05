@@ -1,6 +1,4 @@
-( Embedded Systems - Sistemi Embedded - 17873 )
-( Some code for NUCLEO STM32F446RE )
-( Daniele Peri, Università degli Studi di Palermo, 17-18 )
+
 
 : GPIO{  ( addr -- )  ;
 : PORT   ( addr -- addr )  DUP CONSTANT $0400 + ;
@@ -27,10 +25,18 @@ $04 REGS{
 : 2BIT   $3 2 ;
 : 4BIT   $F 4 ;
 : MASK  ( index mask width -- offset_mask ) ROT * LSHIFT ; \ ROT ( 1 2 3 - 2 3 1)
+
+
+
 : PIN   SWAP 1BIT MASK SWAP ;
 : MODE   OVER 2BIT MASK SWAP ;
 : MODE!   >R R@ MODE @ SWAP NOT AND ROT 3 AND ROT 2 * LSHIFT OR R> ! ; \ to R -> from R
+: (AF)  OVER 8 < IF AFRL ELSE AFRH SWAP 8 - SWAP THEN  OVER 4BIT MASK SWAP ;
+: AF@   (AF) @ AND SWAP 4 * RSHIFT ;
+: AF!   (AF) >R R@ @ SWAP NOT AND ROT $F AND ROT 4 * LSHIFT OR R> ! ;
 : BIT  ( mask addr -- addr value mask )  DUP @ ROT ;
+: SET  ( addr value mask -- )  OR SWAP ! ;
+: CLEAR  ( addr value mask -- )  NOT AND SWAP ! ;
 : TRUTH  ( addr value mask -- value )  AND 0<> NIP ; \ NIP (1 2 - 2)
 : OUT@   ODR PIN BIT TRUTH ;
 : OUT!   ODR PIN BIT SWAP OVER NOT AND >R ROT AND R> OR SWAP ! ;
@@ -41,12 +47,29 @@ $04 REGS{
 : ?BUTTON   BUTTON PRESSED ;
 : CLICKED   BEGIN 2DUP PRESSED UNTIL  BEGIN 2DUP RELEASED UNTIL 2DROP ;
 
+: LED   $20 GPIOA ODR ;      \ Same as 5 GPIOA ODR PIN
+: ON    ( mask addr -- ) BIT SET ;  
+: OFF   ( mask addr -- ) BIT CLEAR ;  
+: ON?   BIT TRUTH ;
+: BLINK   2DUP  OFF  1000 DELAY  2DUP ON  1000 DELAY OFF ;
+
+
+( Test code: wait for button click then blink the LED, do it n times )
+: TEST  ( n -- ) 0 DO  BUTTON CLICKED  LED BLINK  LOOP ;
+
+1 5 GPIOA MODE!
+
+( Ten click test )
+( 10 TEST )
+
+
 : 1ms 3000 ;
 : 1s  1ms 1000 *  ;
 : 1m  1s 60 *  ; 
 : 1h 1m 60 * ;
 
 
+: D0    3 GPIOA ;
 : D2   10 GPIOA ; 
 : D3    3 GPIOB ;
 : D4    5 GPIOB ;
@@ -102,7 +125,6 @@ $04 REGS{
     STRT ADC1 SR bis!           \ Regular Channel Start Flag
     SWSTART ADC1 CR2 bis!       
 ;
-
 : LCDE   D11 ;
 : LCDRS  D12 ; 
 : LCD7   D2 ;
@@ -116,12 +138,15 @@ $04 REGS{
 ;
 
 : BTST AND 0<> ;
+
 : LCDREG4H!
    DUP $80 BTST LCD7 OUT! DUP $40 BTST LCD6 OUT! 
    DUP $20 BTST LCD5 OUT!     $10 BTST LCD4 OUT! ;
+
 : LCDREG4H@
    0 LCD7 OUT@ $80 AND OR  LCD6 OUT@ $40 AND OR
      LCD5 OUT@ $20 AND OR  LCD4 OUT@ $10 AND OR ;
+
 : LCDRSH   -1 LCDRS OUT! ;
 : LCDRSL    0 LCDRS OUT! ;
 : LCDEH    -1 LCDE OUT! ;
@@ -130,6 +155,10 @@ $04 REGS{
 : LCDWR4   LCDEL DUP $100 AND 0<> LCDRS OUT!  
    ( send upper 4 bits: ) DUP LCDEH  LCDREG4H!  LCDEL
    ( send lower 4 bits: ) LCDEH 4 LSHIFT  LCDREG4H!  LCDEL ;
+
+: CLEAR $1 LCDWR4 ;
+
+: >LINE2  $C0 LCDWR4 ;
 
 
 : LCDEMIT   $100 OR LCDWR4 ;
@@ -189,9 +218,9 @@ $04 REGS{
 : PLANT 2 LCDEMIT ; 
 
 : LCD_WELCOME
-    s"   SYSTEM  DOWN  " LCDTYPE 
+    s" X ATTIVARE PREMI" LCDTYPE 
     NEWLINE
-    s" PRESS BLU BUTTON" LCDTYPE
+    s" IL PULSANTE BLU" LCDTYPE
 ;
 
 : NUMBER2LCD
@@ -201,21 +230,21 @@ $04 REGS{
 ;
 
 : DRY_SOIL  
-    s" DRY SOIL   " LCDTYPE DRY
+    s" ASCIUTTO   " LCDTYPE DRY
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : PERFECT_SOIL 
-    PLANT s"  PERFECT SOIL " LCDTYPE PLANT
+    PLANT s" CONDIZIONI OK " LCDTYPE PLANT
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : WET_SOIL 
-    s" WET SOIL   " LCDTYPE WET
+    s" BAGNATO   " LCDTYPE WET
     NEWLINE
-    s" MOISTURE:    " LCDTYPE  NUMBER2LCD
+    s" LIV. ACQUA: " LCDTYPE  NUMBER2LCD
 ;
 
 : MEAN  
@@ -245,3 +274,5 @@ $04 REGS{
     BUTTON CLICKED 
     BEGIN  ADC_ON ?VALUE ADC_OFF ?MOISTURE 1m DELAY  AGAIN
 ;
+
+INIT
