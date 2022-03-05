@@ -5,6 +5,7 @@
     s" IL PULSANTE BLU" LCDTYPE
 ;
 
+\ Word che visualizza il valore in percentuale
 : NUMBER2LCD
     DUP 10 /  48 +  LCDEMIT
     DUP 10 mod  48 +  LCDEMIT
@@ -57,4 +58,9 @@
     BEGIN  ADC_ON ?VALUE ADC_OFF ?MOISTURE 1m DELAY  AGAIN
 ;
 
-INIT
+: INIT_
+    LCD_INIT 
+    LCD_WELCOME
+;
+
+INIT_
